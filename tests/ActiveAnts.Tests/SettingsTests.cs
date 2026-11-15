@@ -21,7 +21,7 @@ public sealed class SettingsTests : IDisposable
 
         Assert.Equal(new Settings(), s);
         Assert.Equal(0xFFFFFF00u, s.BorderColor);
-        Assert.Equal(4, s.BorderWidth);
+        Assert.Equal(new EdgeWidths(4, 4, 4, 4), EdgeWidths.From(s));
         Assert.Equal(8, s.DashLen);
         Assert.Equal(32, s.GapLen);
         Assert.Equal(2, s.AnimStep);
@@ -37,14 +37,27 @@ public sealed class SettingsTests : IDisposable
     public void Defaults_per_missing_key()
     {
         var problems = new List<string>();
-        Settings s = Settings.Load(Ini("[Style]\r\nborderWidth=7\r\n[Anim]\r\nsettleMs=300\r\n"), problems);
+        Settings s = Settings.Load(Ini("[Style]\r\ntopWidth=7\r\n[Anim]\r\nsettleMs=300\r\n"), problems);
 
-        Assert.Equal(new Settings { BorderWidth = 7, SettleMs = 300 }, s);
+        Assert.Equal(new Settings { TopWidth = 7, SettleMs = 300 }, s);
+        Assert.Empty(problems);
+    }
+
+    [Fact]
+    public void Ahk_borderWidth_is_the_default_for_edges_without_their_own_key()
+    {
+        var problems = new List<string>();
+        Settings s = Settings.Load(Ini("[Style]\r\nborderWidth=6\r\nleftWidth=0\r\n"), problems);
+
+        Assert.Equal(new EdgeWidths(6, 6, 6, 0), EdgeWidths.From(s));
         Assert.Empty(problems);
     }
 
     [Theory]
-    [InlineData("Style", "borderWidth", Settings.MinBorderWidth)]
+    [InlineData("Style", "topWidth", Settings.MinEdgeWidth)]
+    [InlineData("Style", "rightWidth", Settings.MinEdgeWidth)]
+    [InlineData("Style", "bottomWidth", Settings.MinEdgeWidth)]
+    [InlineData("Style", "leftWidth", Settings.MinEdgeWidth)]
     [InlineData("Style", "dashLen", Settings.MinDashLen)]
     [InlineData("Style", "gapLen", Settings.MinGapLen)]
     [InlineData("Anim", "animStep", Settings.MinAnimStep)]
@@ -65,7 +78,10 @@ public sealed class SettingsTests : IDisposable
 
     private static int Get(Settings s, string key) => key switch
     {
-        "borderWidth" => s.BorderWidth,
+        "topWidth" => s.TopWidth,
+        "rightWidth" => s.RightWidth,
+        "bottomWidth" => s.BottomWidth,
+        "leftWidth" => s.LeftWidth,
         "dashLen" => s.DashLen,
         "gapLen" => s.GapLen,
         "animStep" => s.AnimStep,
@@ -92,9 +108,9 @@ public sealed class SettingsTests : IDisposable
     public void Non_number_falls_back()
     {
         var problems = new List<string>();
-        Settings s = Settings.Load(Ini("[Style]\r\nborderWidth=wide\r\n"), problems);
+        Settings s = Settings.Load(Ini("[Style]\r\ntopWidth=wide\r\n"), problems);
 
-        Assert.Equal(4, s.BorderWidth);
+        Assert.Equal(4, s.TopWidth);
         Assert.Single(problems);
     }
 
@@ -104,7 +120,10 @@ public sealed class SettingsTests : IDisposable
         var original = new Settings
         {
             BorderColor = 0x80FF0010,
-            BorderWidth = 3,
+            TopWidth = 3,
+            RightWidth = 5,
+            BottomWidth = 0,
+            LeftWidth = 2,
             DashLen = 11,
             GapLen = 13,
             AnimStep = 0,

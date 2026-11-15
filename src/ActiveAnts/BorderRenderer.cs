@@ -3,54 +3,75 @@ using System.Drawing.Imaging;
 
 namespace ActiveAnts;
 
-internal readonly record struct BorderStyle(uint Color, int Width, int DashLen, int GapLen)
+/// <summary>The border edges, in path order: clockwise from the top-left corner.</summary>
+internal enum Edge { Top, Right, Bottom, Left }
+
+/// <summary>Stroke width per edge in pixels at 96 DPI; 0 hides that edge.</summary>
+internal readonly record struct EdgeWidths(int Top, int Right, int Bottom, int Left)
 {
-    public static BorderStyle From(Settings s) => new(s.BorderColor, s.BorderWidth, s.DashLen, s.GapLen);
+    public static EdgeWidths From(Settings s) => new(s.TopWidth, s.RightWidth, s.BottomWidth, s.LeftWidth);
+
+    public int this[Edge edge] => edge switch
+    {
+        Edge.Top => Top,
+        Edge.Right => Right,
+        Edge.Bottom => Bottom,
+        _ => Left,
+    };
+
+    public int Max => Math.Max(Math.Max(Top, Right), Math.Max(Bottom, Left));
 }
 
-/// <summary>A pen is rebuilt only when this changes.</summary>
-internal readonly record struct PenKey(BorderStyle Style, float Scale)
+internal readonly record struct BorderStyle(uint Color, EdgeWidths Widths, int DashLen, int GapLen)
 {
-    public static PenKey For(Settings s, float scale) => new(BorderStyle.From(s), scale);
+    public static BorderStyle From(Settings s) => new(s.BorderColor, EdgeWidths.From(s), s.DashLen, s.GapLen);
 }
 
 /// <summary>One strip window's rectangle and the DPI scale of the monitor it is on.</summary>
 internal readonly record struct StripPiece(RECT Bounds, float Scale);
 
-/// <summary>Part of the border path: a polyline and its distance along the path from the start.</summary>
-internal readonly record struct SubPath(PointF[] Points, float Phase);
+/// <summary>Part of one edge's line and its distance along the border path from the start.</summary>
+internal readonly record struct SubPath(PointF From, PointF To, float Phase, Edge Edge);
 
 /// <summary>
-/// Splits the border into strip windows. Each strip covers the band [edge - p, edge + p]
-/// around one frame edge, so the stroke is centred on the visible frame edge. Top and bottom
-/// span the full width including the corners; left and right fill the height between them.
+/// Splits the border into strip windows. Each drawn edge has a strip covering the band
+/// [edge - p, edge + p] around it, p from that edge's own width, so the stroke is centred on the
+/// visible frame edge. Top and bottom span the full width including the corners; left and right
+/// fill the height between them. An edge of width 0 has no strip.
 /// </summary>
 internal static class StripLayout
 {
-    /// <summary>Top, bottom, left, right. Any of them may be empty for tiny frames.</summary>
-    public static RECT[] Strips(RECT frame, int padding)
+    /// <summary>Top, bottom, left, right. Empty for hidden edges and, for tiny frames, sometimes others.</summary>
+    public static RECT[] Strips(RECT frame, EdgeWidths widths, float scale)
     {
-        RECT o = WindowGeometry.OverlayRect(frame, padding);
-        int t = 2 * padding;
-        var top = new RECT(o.Left, o.Top, o.Right, Math.Min(o.Top + t, o.Bottom));
-        var bottom = new RECT(o.Left, Math.Max(o.Bottom - t, top.Bottom), o.Right, o.Bottom);
-        var left = new RECT(o.Left, top.Bottom, Math.Min(o.Left + t, o.Right), bottom.Top);
-        var right = new RECT(Math.Max(o.Right - t, left.Right), top.Bottom, o.Right, bottom.Top);
+        int Pad(Edge e) => widths[e] > 0 ? WindowGeometry.Padding(widths[e] * scale) : 0;
+        int pt = Pad(Edge.Top), pr = Pad(Edge.Right), pb = Pad(Edge.Bottom), pl = Pad(Edge.Left);
+        // Next to a hidden edge the neighbours end on the frame line; one pixel of room.
+        int oL = pl > 0 ? frame.Left - pl : frame.Left - 1;
+        int oT = pt > 0 ? frame.Top - pt : frame.Top - 1;
+        int oR = pr > 0 ? frame.Right + pr : frame.Right + 1;
+        int oB = pb > 0 ? frame.Bottom + pb : frame.Bottom + 1;
+
+        RECT top = pt > 0 ? new RECT(oL, oT, oR, Math.Min(frame.Top + pt, oB)) : default;
+        int midTop = pt > 0 ? top.Bottom : oT;
+        RECT bottom = pb > 0 ? new RECT(oL, Math.Max(frame.Bottom - pb, midTop), oR, oB) : default;
+        int midBottom = pb > 0 ? bottom.Top : oB;
+        RECT left = pl > 0 ? new RECT(oL, midTop, Math.Min(frame.Left + pl, oR), midBottom) : default;
+        RECT right = pr > 0 ? new RECT(Math.Max(frame.Right - pr, pl > 0 ? left.Right : oL), midTop, oR, midBottom) : default;
         return [top, bottom, left, right];
     }
 
     /// <summary>
     /// Per monitor: the strips at that monitor's scale, clipped to the monitor. A frame on one
-    /// monitor gives four pieces; a spanning frame gives more, each with its own scale, all
-    /// centred on the same frame edge.
+    /// monitor gives a piece per drawn edge; a spanning frame gives more, each with its own
+    /// scale, all centred on the same frame edge.
     /// </summary>
-    public static List<StripPiece> Pieces(RECT frame, int borderWidth, IReadOnlyList<MonitorArea> monitors)
+    public static List<StripPiece> Pieces(RECT frame, EdgeWidths widths, IReadOnlyList<MonitorArea> monitors)
     {
         var pieces = new List<StripPiece>(4);
         foreach (MonitorArea m in monitors)
         {
-            int padding = WindowGeometry.Padding(borderWidth * m.Scale);
-            foreach (RECT strip in Strips(frame, padding))
+            foreach (RECT strip in Strips(frame, widths, m.Scale))
             {
                 RECT piece = strip.Intersect(m.Bounds);
                 if (!piece.IsEmpty)
@@ -73,65 +94,36 @@ internal static class StripLayout
     }
 
     /// <summary>
-    /// The parts of the border path that fall inside <paramref name="region"/> grown by
-    /// <paramref name="margin"/>. The path runs clockwise from the top-left corner. Edges that
-    /// meet at a corner inside the region stay one polyline, so the corner gets its line join;
-    /// that includes the top-left corner, where the end of the path continues into its start
-    /// (seamless with <see cref="PatternStretch"/>). Drawing these with the dash offset moved by
-    /// each Phase gives the same pixels in the region as drawing the whole border, at a fraction
-    /// of the work.
+    /// The parts of the drawn edges that fall inside <paramref name="region"/> grown by
+    /// <paramref name="margin"/>. Each edge is one straight line on the frame edge, extended at
+    /// both ends by half the width of the neighbouring edge, so dashes run to the outer corner
+    /// at their own thickness and the corner square is filled where a dash passes (a square
+    /// corner, also where a thick edge meets a thin one). Phase is the distance along the border
+    /// path (clockwise from the top-left corner), so the pattern runs on around the corners.
     /// </summary>
-    public static List<SubPath> SubPaths(RECT frame, RECT region, float margin)
+    public static List<SubPath> SubPaths(RECT frame, EdgeWidths widths, float scale, RECT region, float margin)
     {
         float l = frame.Left, t = frame.Top, r = frame.Right, b = frame.Bottom, w = r - l, h = b - t;
-        (PointF From, PointF To, float Phase)[] edges =
+        float perimeter = 2 * (w + h);
+        float Ext(Edge e) => widths[e] * scale / 2;     // 0 for a hidden edge
+        (Edge Edge, PointF From, PointF To, float Phase)[] edges =
         [
-            (new(l, t), new(r, t), 0),
-            (new(r, t), new(r, b), w),
-            (new(r, b), new(l, b), w + h),
-            (new(l, b), new(l, t), 2 * w + h),
+            (Edge.Top, new(l - Ext(Edge.Left), t), new(r + Ext(Edge.Right), t), -Ext(Edge.Left)),
+            (Edge.Right, new(r, t - Ext(Edge.Top)), new(r, b + Ext(Edge.Bottom)), w - Ext(Edge.Top)),
+            (Edge.Bottom, new(r + Ext(Edge.Right), b), new(l - Ext(Edge.Left), b), w + h - Ext(Edge.Right)),
+            (Edge.Left, new(l, b + Ext(Edge.Bottom)), new(l, t - Ext(Edge.Top)), 2 * w + h - Ext(Edge.Bottom)),
         ];
         var clip = RectangleF.FromLTRB(region.Left - margin, region.Top - margin, region.Right + margin, region.Bottom + margin);
 
-        var result = new List<SubPath>(2);
-        List<PointF>? current = null;
-        float currentPhase = 0;
-        for (int i = 0; i < edges.Length; i++)
+        var result = new List<SubPath>(3);
+        foreach (var e in edges)
         {
-            if (!ClipEdge(edges[i].From, edges[i].To, clip, out PointF start, out PointF end, out float skipped))
-            {
-                Flush();
+            if (widths[e.Edge] == 0 || !ClipEdge(e.From, e.To, clip, out PointF start, out PointF end, out float skipped))
                 continue;
-            }
-            if (current != null && current[^1] == start)
-            {
-                current.Add(end);
-            }
-            else
-            {
-                Flush();
-                current = [start, end];
-                currentPhase = edges[i].Phase + skipped;
-            }
-        }
-        Flush();
-
-        // Path end and start meet at the top-left corner: one polyline through the corner.
-        var corner = new PointF(l, t);
-        if (result.Count >= 2 && result[^1].Points[^1] == corner && result[0].Points[0] == corner)
-        {
-            SubPath tail = result[^1], head = result[0];
-            result.RemoveAt(result.Count - 1);
-            result[0] = new SubPath([.. tail.Points, .. head.Points[1..]], tail.Phase);
+            float phase = e.Phase + skipped;
+            result.Add(new SubPath(start, end, phase < 0 ? phase + perimeter : phase, e.Edge));
         }
         return result;
-
-        void Flush()
-        {
-            if (current != null)
-                result.Add(new SubPath([.. current], currentPhase));
-            current = null;
-        }
     }
 
     /// <summary>Clips an axis-aligned edge; <paramref name="skipped"/> is the length cut off its start.</summary>
@@ -170,22 +162,25 @@ internal static class StripLayout
 
 /// <summary>
 /// Paints the dashed border into one cached premultiplied-ARGB DIB per strip window and pushes
-/// it with UpdateLayeredWindow. Every strip draws only the parts of the border path that cross
+/// it with UpdateLayeredWindow. Every strip draws only the parts of the edge lines that cross
 /// it, with the dash offset moved to match, so the pattern is one continuous path around the
 /// corners while the dash work per frame scales with the strip, not the whole perimeter.
+/// Dashes are filled rectangles, not GDI+ dashed lines: GDI+ draws a short dashed line that
+/// lies entirely in a gap as solid, which left stray blocks at the corners.
 /// </summary>
 internal sealed class BorderRenderer : IDisposable
 {
     private readonly List<StripSurface> surfaces = [];
-    private readonly Dictionary<PenKey, Pen> pens = [];
     private readonly Dictionary<float, float> stretch = [];     // per DPI scale, for the current frame
     private BorderStyle style;
+    private SolidBrush brush;
     private RECT frame;
     private int activeCount;
 
     public BorderRenderer(BorderStyle style, Action<int, nint, nint> hostMessage)
     {
         this.style = style;
+        brush = new SolidBrush(Color.FromArgb(unchecked((int)style.Color)));
         surfaces.Add(new StripSurface(new OverlayWindow(hostMessage)));
     }
 
@@ -196,10 +191,12 @@ internal sealed class BorderRenderer : IDisposable
 
     public void SetStyle(BorderStyle newStyle)
     {
-        if (newStyle == style)
-            return;
+        if (newStyle.Color != style.Color)
+        {
+            brush.Dispose();
+            brush = new SolidBrush(Color.FromArgb(unchecked((int)newStyle.Color)));
+        }
         style = newStyle;
-        DisposePens();
     }
 
     /// <summary>Full redraw at a new geometry.</summary>
@@ -208,21 +205,15 @@ internal sealed class BorderRenderer : IDisposable
         frame = newFrame;
         stretch.Clear();
         foreach (StripPiece piece in pieces)
-        {
-            if (stretch.ContainsKey(piece.Scale))
-                continue;
-            float k = StripLayout.PatternStretch(frame, (style.DashLen + style.GapLen) * piece.Scale);
-            stretch[piece.Scale] = k;
-            PenFor(new PenKey(style, piece.Scale)).DashPattern =
-                [style.DashLen * k / style.Width, style.GapLen * k / style.Width];
-        }
+            stretch.TryAdd(piece.Scale, StripLayout.PatternStretch(frame, (style.DashLen + style.GapLen) * piece.Scale));
+        float margin = style.Widths.Max * pieces.Select(p => p.Scale).DefaultIfEmpty(1f).Max() / 2 + 2;
         while (surfaces.Count < pieces.Count)
             surfaces.Add(new StripSurface(new OverlayWindow(null)));
 
         for (int i = 0; i < pieces.Count; i++)
         {
             StripSurface s = surfaces[i];
-            s.Place(pieces[i], frame, style.Width * pieces[i].Scale / 2 + 2);
+            s.Place(pieces[i], frame, style.Widths, margin);
             Render(s, dashOffset);
             s.Push();
             s.Window.ShowNoActivate();
@@ -255,43 +246,41 @@ internal sealed class BorderRenderer : IDisposable
 
     private void Render(StripSurface s, float dashOffset)
     {
-        Pen pen = PenFor(new PenKey(style, s.Scale));
         Graphics g = s.Graphics!;
         g.Clear(Color.FromArgb(0));
-        DrawParts(g, pen, s.SubPaths, dashOffset * stretch[s.Scale] / style.Width);
+        float k = stretch[s.Scale] * s.Scale;       // 96-DPI pixels -> physical, seamless period
+        DrawParts(g, brush, style.Widths, s.Scale, s.SubPaths, dashOffset * k, style.DashLen * k,
+                  (style.DashLen + style.GapLen) * k);
     }
 
     /// <summary>
-    /// Draws path parts with the dash pattern continuous along the whole path. Offsets are in
-    /// units of the pen width; <paramref name="offsetUnits"/> is the animation offset.
+    /// Fills the dashes of the edge parts, the pattern continuous along the whole border path:
+    /// a point at distance u along the path is in a dash when (u + offsetPx) mod periodPx is
+    /// below dashPx. All lengths in physical pixels; each part's thickness is its edge's width.
     /// </summary>
-    internal static void DrawParts(Graphics g, Pen pen, IReadOnlyList<SubPath> parts, float offsetUnits)
+    internal static void DrawParts(Graphics g, Brush brush, EdgeWidths widths, float scale,
+                                   IReadOnlyList<SubPath> parts, float offsetPx, float dashPx, float periodPx)
     {
         foreach (SubPath part in parts)
         {
-            pen.DashOffset = offsetUnits + part.Phase / pen.Width;
-            g.DrawLines(pen, part.Points);
+            float thick = widths[part.Edge] * scale, half = thick / 2;
+            bool horizontal = part.From.Y == part.To.Y;
+            float a = horizontal ? part.From.X : part.From.Y, z = horizontal ? part.To.X : part.To.Y;
+            float dir = z >= a ? 1 : -1, length = Math.Abs(z - a);
+            float s0 = offsetPx + part.Phase;
+            // Distance along the part to the start of the dash at or before its start.
+            for (float start = MathF.Floor(s0 / periodPx) * periodPx - s0; start < length; start += periodPx)
+            {
+                float t0 = Math.Max(start, 0), t1 = Math.Min(start + dashPx, length);
+                if (t1 <= t0)
+                    continue;
+                float p0 = a + dir * t0, p1 = a + dir * t1;
+                float lo = Math.Min(p0, p1), size = Math.Abs(p1 - p0);
+                g.FillRectangle(brush, horizontal
+                    ? new RectangleF(lo, part.From.Y - half, size, thick)
+                    : new RectangleF(part.From.X - half, lo, thick, size));
+            }
         }
-    }
-
-    private Pen PenFor(PenKey key)
-    {
-        if (pens.TryGetValue(key, out Pen? pen))
-            return pen;
-        // Dash pattern and offset are in units of the pen width, so they scale with it.
-        pen = new Pen(Color.FromArgb(unchecked((int)key.Style.Color)), key.Style.Width * key.Scale)
-        {
-            DashPattern = [key.Style.DashLen / (float)key.Style.Width, key.Style.GapLen / (float)key.Style.Width],
-        };
-        pens[key] = pen;
-        return pen;
-    }
-
-    private void DisposePens()
-    {
-        foreach (Pen pen in pens.Values)
-            pen.Dispose();
-        pens.Clear();
     }
 
     public void Dispose()
@@ -299,7 +288,7 @@ internal sealed class BorderRenderer : IDisposable
         foreach (StripSurface s in surfaces)
             s.Dispose();
         surfaces.Clear();
-        DisposePens();
+        brush.Dispose();
     }
 
     /// <summary>One strip window plus its DIB section, memory DC and GDI+ wrapper.</summary>
@@ -315,9 +304,9 @@ internal sealed class BorderRenderer : IDisposable
         public Graphics? Graphics { get; private set; }
         public List<SubPath> SubPaths { get; private set; } = [];
 
-        public void Place(StripPiece piece, RECT frame, float margin)
+        public void Place(StripPiece piece, RECT frame, EdgeWidths widths, float margin)
         {
-            SubPaths = StripLayout.SubPaths(frame, piece.Bounds, margin);
+            SubPaths = StripLayout.SubPaths(frame, widths, piece.Scale, piece.Bounds, margin);
             if (piece.Bounds.Width != width || piece.Bounds.Height != height)
                 Allocate(piece.Bounds.Width, piece.Bounds.Height);
             Bounds = piece.Bounds;

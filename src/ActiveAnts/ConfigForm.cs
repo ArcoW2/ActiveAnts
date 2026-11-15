@@ -6,7 +6,7 @@ internal sealed class ConfigForm : Form
     private readonly Func<Settings, bool, IWin32Window, bool> apply;
     private readonly Func<IWin32Window, bool> save;
     private readonly TextBox color;
-    private readonly NumberBox width, dash, gap, step, animMs, settle, sync;
+    private readonly NumberBox top, bottom, left, right, dash, gap, step, animMs, settle, sync;
     private readonly CheckBox clockwise, debug, startup;
 
     /// <param name="apply">Takes the new settings and the startup choice; false keeps the window open.</param>
@@ -32,9 +32,10 @@ internal sealed class ConfigForm : Form
 
         var style = Group("Style", 10, 8, 220, 156);
         color = Field(style, 0, "Border color (ARGB):", new TextBox(), $"0x{settings.BorderColor:X8}");
-        width = Field(style, 1, "Border width (px):", new NumberBox(), settings.BorderWidth.ToString());
-        dash = Field(style, 2, "Dash length (px):", new NumberBox(), settings.DashLen.ToString());
-        gap = Field(style, 3, "Gap length (px):", new NumberBox(), settings.GapLen.ToString());
+        (top, bottom) = PairField(style, 1, "Top / bottom (px):", settings.TopWidth, settings.BottomWidth);
+        (left, right) = PairField(style, 2, "Left / right (px):", settings.LeftWidth, settings.RightWidth);
+        dash = Field(style, 3, "Dash length (px):", new NumberBox(), settings.DashLen.ToString());
+        gap = Field(style, 4, "Gap length (px):", new NumberBox(), settings.GapLen.ToString());
 
         var anim = Group("Animation", 242, 8, 220, 156);
         step = Field(anim, 0, "Anim step (px/tick):", new NumberBox(), settings.AnimStep.ToString());
@@ -70,7 +71,10 @@ internal sealed class ConfigForm : Form
         settings = null;
         if (!Settings.TryParseColor(color.Text, out uint c))
             return Error("Border color (ARGB) must be a 32-bit hex value, for example 0xFFFFFF00.");
-        if (!ReadInt(width, "Border width", Settings.MinBorderWidth, out int w) ||
+        if (!ReadInt(top, "Top width", Settings.MinEdgeWidth, out int wt) ||
+            !ReadInt(bottom, "Bottom width", Settings.MinEdgeWidth, out int wb) ||
+            !ReadInt(left, "Left width", Settings.MinEdgeWidth, out int wl) ||
+            !ReadInt(right, "Right width", Settings.MinEdgeWidth, out int wr) ||
             !ReadInt(dash, "Dash length", Settings.MinDashLen, out int d) ||
             !ReadInt(gap, "Gap length", Settings.MinGapLen, out int g) ||
             !ReadInt(step, "Anim step", Settings.MinAnimStep, out int st) ||
@@ -82,7 +86,10 @@ internal sealed class ConfigForm : Form
         settings = new Settings
         {
             BorderColor = c,
-            BorderWidth = w,
+            TopWidth = wt,
+            RightWidth = wr,
+            BottomWidth = wb,
+            LeftWidth = wl,
             DashLen = d,
             GapLen = g,
             AnimStep = st,
@@ -124,6 +131,17 @@ internal sealed class ConfigForm : Form
         box.Text = value;
         group.Controls.Add(box);
         return box;
+    }
+
+    /// <summary>Two narrow edits on one row; a width of 0 hides that edge.</summary>
+    private static (NumberBox, NumberBox) PairField(GroupBox group, int row, string label, int first, int second)
+    {
+        int y = 22 + row * 26;
+        group.Controls.Add(new Label { Text = label, Bounds = new Rectangle(12, y + 3, 116, 20) });
+        var a = new NumberBox { Bounds = new Rectangle(128, y, 38, 23), Text = first.ToString() };
+        var b = new NumberBox { Bounds = new Rectangle(170, y, 38, 23), Text = second.ToString() };
+        group.Controls.AddRange([a, b]);
+        return (a, b);
     }
 
     /// <summary>Edit that accepts digits only, like AHK's Number option.</summary>

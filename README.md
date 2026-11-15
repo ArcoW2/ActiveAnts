@@ -28,7 +28,7 @@ monitors they scale with that monitor's DPI.
 | Section | Key | Default | Minimum | Description |
 |---|---|---|---|---|
 | Style | `borderColor` | `0xFFFFFF00` | | ARGB hex |
-| Style | `borderWidth` | `4` | 1 | Stroke width |
+| Style | `topWidth` `rightWidth` `bottomWidth` `leftWidth` | `4` | 0 | Stroke width per edge; `0` hides that edge. Missing keys take the AHK key `borderWidth` if present |
 | Style | `dashLen` | `8` | 1 | Dash length |
 | Style | `gapLen` | `32` | 1 | Gap between dashes |
 | Anim | `animStep` | `2` | 0 | Pixels the pattern advances per `animMs` |
@@ -70,7 +70,9 @@ Output: `publish/ActiveAnts.exe`.
 - Four thin layered strip windows instead of one window-sized overlay: per-frame pixel work scales
   with the perimeter, not the area.
 - GDI+ draws into cached premultiplied-ARGB DIB sections; `UpdateLayeredWindow` pushes them.
-  Each strip draws only the part of the border path that crosses it. Geometry is recomputed on
+  Each strip draws only the part of the border path that crosses it. Dashes are filled
+  rectangles computed per edge, so each edge can have its own width; edges run to the outer
+  corner, giving a square corner where a thick edge meets a thin one. Geometry is recomputed on
   events, not per animation frame.
 - Frames are paced on the compositor clock (`DCompositionWaitForCompositorClock`, Windows 11;
   `DwmFlush` on Windows 10), not a timer: evenly spaced, whatever the refresh rate of each

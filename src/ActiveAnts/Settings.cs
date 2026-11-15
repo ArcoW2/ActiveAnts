@@ -11,7 +11,7 @@ namespace ActiveAnts;
 /// </summary>
 internal sealed record Settings
 {
-    public const int MinBorderWidth = 1;
+    public const int MinEdgeWidth = 0;          // 0: that edge is not drawn
     public const int MinDashLen = 1;
     public const int MinGapLen = 1;
     public const int MinAnimStep = 0;
@@ -20,7 +20,10 @@ internal sealed record Settings
     public const int MinSyncForegroundMs = 100;
 
     public uint BorderColor { get; init; } = 0xFFFFFF00;
-    public int BorderWidth { get; init; } = 4;
+    public int TopWidth { get; init; } = 4;
+    public int RightWidth { get; init; } = 4;
+    public int BottomWidth { get; init; } = 4;
+    public int LeftWidth { get; init; } = 4;
     public int DashLen { get; init; } = 8;
     public int GapLen { get; init; } = 32;
     public int AnimStep { get; init; } = 2;
@@ -47,10 +50,15 @@ internal sealed record Settings
             borderColor = d.BorderColor;
         }
 
+        // borderWidth (AHK, one width for all edges) is the default for edges without their own key.
+        int width = ReadInt(iniPath, "Style", "borderWidth", d.TopWidth, 1, problems);
         return new Settings
         {
             BorderColor = borderColor,
-            BorderWidth = ReadInt(iniPath, "Style", "borderWidth", d.BorderWidth, MinBorderWidth, problems),
+            TopWidth = ReadInt(iniPath, "Style", "topWidth", width, MinEdgeWidth, problems),
+            RightWidth = ReadInt(iniPath, "Style", "rightWidth", width, MinEdgeWidth, problems),
+            BottomWidth = ReadInt(iniPath, "Style", "bottomWidth", width, MinEdgeWidth, problems),
+            LeftWidth = ReadInt(iniPath, "Style", "leftWidth", width, MinEdgeWidth, problems),
             DashLen = ReadInt(iniPath, "Style", "dashLen", d.DashLen, MinDashLen, problems),
             GapLen = ReadInt(iniPath, "Style", "gapLen", d.GapLen, MinGapLen, problems),
             AnimStep = ReadInt(iniPath, "Anim", "animStep", d.AnimStep, MinAnimStep, problems),
@@ -66,7 +74,10 @@ internal sealed record Settings
     public void Save(string iniPath)
     {
         Write(iniPath, "Style", "borderColor", $"0x{BorderColor:X8}");
-        Write(iniPath, "Style", "borderWidth", BorderWidth);
+        Write(iniPath, "Style", "topWidth", TopWidth);
+        Write(iniPath, "Style", "rightWidth", RightWidth);
+        Write(iniPath, "Style", "bottomWidth", BottomWidth);
+        Write(iniPath, "Style", "leftWidth", LeftWidth);
         Write(iniPath, "Style", "dashLen", DashLen);
         Write(iniPath, "Style", "gapLen", GapLen);
         Write(iniPath, "Anim", "animStep", AnimStep);

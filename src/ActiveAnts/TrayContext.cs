@@ -118,7 +118,7 @@ internal sealed class TrayContext : ApplicationContext
             if (frame.Width <= 0 || frame.Height <= 0)
                 return;
 
-            List<StripPiece> pieces = StripLayout.Pieces(frame, settings.BorderWidth, WindowGeometry.Monitors());
+            List<StripPiece> pieces = StripLayout.Pieces(frame, EdgeWidths.From(settings), WindowGeometry.Monitors());
             if (pieces.Count == 0)
             {
                 HideBorder();

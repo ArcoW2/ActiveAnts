@@ -40,7 +40,7 @@ deviations are explained in the referenced section.
 | Hide | overlayVisible=false, stop Animate timer, hide overlay | Same |
 | Redraw | Hide if no window / gone / own overlay / minimised / full-screen; visible rect via `DwmGetWindowAttribute(DWMWA_EXTENDED_FRAME_BOUNDS)` with `GetWindowRect` fallback; padding `ceil(w/2)+1`; draw; update layered; 10 consecutive errors -> restart | Same checks and outcome; full geometry on events only, Animate tick checks `IsWindow` only (see 3.4) |
 | Full-screen test | Window rect vs `MonitorFromWindow(MONITOR_DEFAULTTONEAREST)` monitor rect, tolerance 4 px | Same, as a pure function for testing |
-| Draw cache | DIB rebuilt on size change; pen rebuilt on `color|width|dash|gap` change; per frame: clear, set dash offset, draw rectangle | `Bitmap(w, h, stride, Format32bppPArgb, pBits)` over one DIB section per strip; `Pen` with `DashPattern` = len/width and `DashOffset` = offset/width; `SmoothingMode.AntiAlias`; pen key also includes the DPI scale (see 3.3) |
+| Draw cache | DIB rebuilt on size change; pen rebuilt on `color|width|dash|gap` change; per frame: clear, set dash offset, draw rectangle | `Bitmap(w, h, stride, Format32bppPArgb, pBits)` over one DIB section per strip; dashes filled as rectangles per edge (not GDI+ dashed pens: a short dashed line lying entirely in a gap is drawn solid by GDI+); `SmoothingMode.AntiAlias`; per-edge width, 0 hides the edge; dash period stretched so the perimeter holds whole periods (no seam) |
 | UpdateLayered | `UpdateLayeredWindow` with `ULW_ALPHA`, `AC_SRC_OVER`, `AC_SRC_ALPHA`, const alpha 255; show; arm heartbeat; restart Animate | Same, per strip; position and size passed on every call (with `NULL` for them Windows did not show the new content: measured, only full redraws reached the screen) |
 | Layout change | `WM_DISPLAYCHANGE`, `WM_DPICHANGED`, `WM_DEVICECHANGE` -> restart process after 1500 ms debounce | No restart. `WM_DISPLAYCHANGE` -> debounced full redraw; `WM_DPICHANGED` swallowed; `WM_DEVICECHANGE` ignored (see 3.5) |
 | Power | `WM_POWERBROADCAST` with `PBT_APMRESUMESUSPEND` (7) or `PBT_APMRESUMEAUTOMATIC` (18) -> rehook after 2000 ms | Same |
@@ -60,7 +60,7 @@ Not ported: `DoRecalibrate` is dead code in the AHK script (never referenced).
   so `ActiveAnts.exe` uses `ActiveAnts.ini`. A renamed exe uses its own INI.
 - Location: directory of `Environment.ProcessPath` (not `AppContext.BaseDirectory`, which points to a
   temp extraction folder for some single-file setups).
-- Format: same sections and keys as `marching-ants.ini`: `[Style] borderColor borderWidth dashLen
+- Format: same sections and keys as `marching-ants.ini`, with `borderWidth` replaced by `topWidth rightWidth bottomWidth leftWidth` (new; `borderWidth` still read as their default): `[Style] borderColor borderWidth dashLen
   gapLen`, `[Anim] animStep animMs settleMs syncForegroundMs clockwise` (`clockwise` is new), `[Debug] enabled`. Color stored as
   `0x%08X` hex string.
 - Defaults (missing file or key) are the values of the current `marching-ants.ini`:
@@ -68,7 +68,7 @@ Not ported: `DoRecalibrate` is dead code in the AHK script (never referenced).
   | Key | Default |
   |---|---|
   | `borderColor` | `0xFFFFFF00` |
-  | `borderWidth` | `4` |
+  | `topWidth` `rightWidth` `bottomWidth` `leftWidth` | `4` (or `borderWidth`) |
   | `dashLen` | `8` |
   | `gapLen` | `32` |
   | `animStep` | `2` |
@@ -177,7 +177,7 @@ MB/frame.
 | `OnLocation` logs its errors as "Redraw error" | Logs as "OnLocation error" |
 | `IsStartupEnabled` is true for any value under `MarchingAnts`, even one pointing at another exe | Enabled only when the value equals this exe's quoted path (case-insensitive). A value pointing at the AHK exe shows unchecked; checking it replaces the AHK entry |
 | `SetStartup` failure only logged | Error box in the config window, plus log |
-| No range checks: `borderWidth=0` divides by zero in the dash array; zero or negative values accepted | Lower bounds enforced in the config window (error box naming the field) and on INI load (default + log): `borderWidth >= 1`, `dashLen >= 1`, `gapLen >= 1` (GDI+ dash entries must be positive), `animStep >= 0`, `animMs >= 10`, `settleMs >= 0`, `syncForegroundMs >= 100`; `borderColor` must parse as 32-bit hex |
+| No range checks: `borderWidth=0` divides by zero in the dash array; zero or negative values accepted | Lower bounds enforced in the config window (error box naming the field) and on INI load (default + log): edge widths `>= 0` (0 hides the edge), `dashLen >= 1`, `gapLen >= 1` (GDI+ dash entries must be positive), `animStep >= 0`, `animMs >= 10`, `settleMs >= 0`, `syncForegroundMs >= 100`; `borderColor` must parse as 32-bit hex |
 | Config error box says only "One of the values isn't a valid number" | Names the field and its allowed range |
 | Process restart on `WM_DISPLAYCHANGE`, `WM_DPICHANGED` and any `WM_DEVICECHANGE` (a USB stick too). The restart was a workaround for the fixed system DPI of a system-aware process | Per-Monitor V2 removes the need: `WM_DISPLAYCHANGE` -> debounced (1500 ms) full geometry + DPI refresh; `WM_DPICHANGED` swallowed; `WM_DEVICECHANGE` ignored. Monitor add/remove also sends `WM_DISPLAYCHANGE` |
 | Save to a non-writable INI fails silently | Error box |
@@ -229,7 +229,7 @@ src/ActiveAnts/
   TrayContext.cs         ApplicationContext: tray, timers, watchdog, restart, exit cleanup
   OverlayWindow.cs       layered click-through NativeWindow (one strip); the top strip's WndProc
                          handles display/power messages
-  BorderRenderer.cs      strip layout, per-strip DIB + Bitmap + Graphics, shared Pen, UpdateLayeredWindow
+  BorderRenderer.cs      strip layout, per-strip DIB + Bitmap + Graphics, dash rectangles, UpdateLayeredWindow
   WindowTracker.cs       WinEvent hooks, foreground/location logic, rehook
   WindowGeometry.cs      visible rect, full-screen test, padding, DPI scale (pure where possible)
   Settings.cs            load/save via private-profile API, defaults, range checks
@@ -273,7 +273,7 @@ Automated (xUnit):
 - Spanning layout: a frame crossing a vertical, horizontal and both monitor boundaries is split into
   pieces that tile the border without gap or overlap; each piece's stroke centre lies on the frame
   edge, whatever its scale.
-- Pen key: changes in color, width, dash, gap or DPI scale force rebuild; other changes do not.
+- Edge parts: strips drawn from clipped edge parts match the whole border pixel for pixel; square corner where widths differ; hidden edge not drawn; a short part in a gap stays empty.
 - Startup: state check true only for this exe's path, case-insensitive; false for the AHK exe path.
 
 Manual, with the AHK exe stopped:
