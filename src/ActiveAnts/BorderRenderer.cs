@@ -61,11 +61,25 @@ internal static class StripLayout
     }
 
     /// <summary>
+    /// Factor that stretches the dash period so the perimeter holds a whole number of periods.
+    /// The pattern then has no seam where the path starts and ends; the change is at most half a
+    /// period spread over the whole border.
+    /// </summary>
+    public static float PatternStretch(RECT frame, float periodPx)
+    {
+        float perimeter = 2f * (frame.Width + frame.Height);
+        float periods = Math.Max(1f, MathF.Round(perimeter / periodPx));
+        return perimeter / (periods * periodPx);
+    }
+
+    /// <summary>
     /// The parts of the border path that fall inside <paramref name="region"/> grown by
-    /// <paramref name="margin"/>. The path is the one DrawRectangle uses: clockwise from the
-    /// top-left corner. Edges that meet at a corner inside the region stay one polyline, so the
-    /// corner gets its line join. Drawing these with the dash offset moved by each Phase gives
-    /// the same pixels in the region as drawing the whole rectangle, at a fraction of the work.
+    /// <paramref name="margin"/>. The path runs clockwise from the top-left corner. Edges that
+    /// meet at a corner inside the region stay one polyline, so the corner gets its line join;
+    /// that includes the top-left corner, where the end of the path continues into its start
+    /// (seamless with <see cref="PatternStretch"/>). Drawing these with the dash offset moved by
+    /// each Phase gives the same pixels in the region as drawing the whole border, at a fraction
+    /// of the work.
     /// </summary>
     public static List<SubPath> SubPaths(RECT frame, RECT region, float margin)
     {
@@ -101,6 +115,15 @@ internal static class StripLayout
             }
         }
         Flush();
+
+        // Path end and start meet at the top-left corner: one polyline through the corner.
+        var corner = new PointF(l, t);
+        if (result.Count >= 2 && result[^1].Points[^1] == corner && result[0].Points[0] == corner)
+        {
+            SubPath tail = result[^1], head = result[0];
+            result.RemoveAt(result.Count - 1);
+            result[0] = new SubPath([.. tail.Points, .. head.Points[1..]], tail.Phase);
+        }
         return result;
 
         void Flush()
@@ -155,6 +178,7 @@ internal sealed class BorderRenderer : IDisposable
 {
     private readonly List<StripSurface> surfaces = [];
     private readonly Dictionary<PenKey, Pen> pens = [];
+    private readonly Dictionary<float, float> stretch = [];     // per DPI scale, for the current frame
     private BorderStyle style;
     private RECT frame;
     private int activeCount;
@@ -182,6 +206,16 @@ internal sealed class BorderRenderer : IDisposable
     public void Show(RECT newFrame, IReadOnlyList<StripPiece> pieces, float dashOffset)
     {
         frame = newFrame;
+        stretch.Clear();
+        foreach (StripPiece piece in pieces)
+        {
+            if (stretch.ContainsKey(piece.Scale))
+                continue;
+            float k = StripLayout.PatternStretch(frame, (style.DashLen + style.GapLen) * piece.Scale);
+            stretch[piece.Scale] = k;
+            PenFor(new PenKey(style, piece.Scale)).DashPattern =
+                [style.DashLen * k / style.Width, style.GapLen * k / style.Width];
+        }
         while (surfaces.Count < pieces.Count)
             surfaces.Add(new StripSurface(new OverlayWindow(null)));
 
@@ -224,7 +258,7 @@ internal sealed class BorderRenderer : IDisposable
         Pen pen = PenFor(new PenKey(style, s.Scale));
         Graphics g = s.Graphics!;
         g.Clear(Color.FromArgb(0));
-        DrawParts(g, pen, s.SubPaths, dashOffset / style.Width);
+        DrawParts(g, pen, s.SubPaths, dashOffset * stretch[s.Scale] / style.Width);
     }
 
     /// <summary>
