@@ -28,7 +28,7 @@ monitors they scale with that monitor's DPI.
 | Section | Key | Default | Minimum | Description |
 |---|---|---|---|---|
 | Style | `borderColor` | `0xFFFFFF00` | | ARGB hex |
-| Style | `topWidth` `rightWidth` `bottomWidth` `leftWidth` | `4` | 0 | Stroke width per edge; `0` hides that edge. Missing keys take the AHK key `borderWidth` if present |
+| Style | `topWidth` `rightWidth` `bottomWidth` `leftWidth` | `4` | 0 | Stroke width per edge, at most `10`; `0` hides that edge. Missing keys take the AHK key `borderWidth` if present |
 | Style | `dashLen` | `8` | 1 | Dash length |
 | Style | `gapLen` | `32` | 1 | Gap between dashes |
 | Anim | `animStep` | `2` | 0 | Pixels the pattern advances per `animMs` |

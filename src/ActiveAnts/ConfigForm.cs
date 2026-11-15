@@ -5,7 +5,7 @@ internal sealed class ConfigForm : Form
 {
     private readonly Func<Settings, bool, IWin32Window, bool> apply;
     private readonly Func<IWin32Window, bool> save;
-    private readonly TextBox color;
+    private readonly SelectingTextBox color;
     private readonly NumberBox top, bottom, left, right, dash, gap, step, animMs, settle, sync;
     private readonly CheckBox clockwise, debug, startup;
 
@@ -31,7 +31,7 @@ internal sealed class ConfigForm : Form
                 Icon = new Icon(s);
 
         var style = Group("Style", 10, 8, 220, 156);
-        color = Field(style, 0, "Border color (ARGB):", new TextBox(), $"0x{settings.BorderColor:X8}");
+        color = Field(style, 0, "Border color (ARGB):", new SelectingTextBox(), $"0x{settings.BorderColor:X8}");
         (top, bottom) = PairField(style, 1, "Top / bottom (px):", settings.TopWidth, settings.BottomWidth);
         (left, right) = PairField(style, 2, "Left / right (px):", settings.LeftWidth, settings.RightWidth);
         dash = Field(style, 3, "Dash length (px):", new NumberBox(), settings.DashLen.ToString());
@@ -71,10 +71,10 @@ internal sealed class ConfigForm : Form
         settings = null;
         if (!Settings.TryParseColor(color.Text, out uint c))
             return Error("Border color (ARGB) must be a 32-bit hex value, for example 0xFFFFFF00.");
-        if (!ReadInt(top, "Top width", Settings.MinEdgeWidth, out int wt) ||
-            !ReadInt(bottom, "Bottom width", Settings.MinEdgeWidth, out int wb) ||
-            !ReadInt(left, "Left width", Settings.MinEdgeWidth, out int wl) ||
-            !ReadInt(right, "Right width", Settings.MinEdgeWidth, out int wr) ||
+        if (!ReadInt(top, "Top width", Settings.MinEdgeWidth, out int wt, Settings.MaxEdgeWidth) ||
+            !ReadInt(bottom, "Bottom width", Settings.MinEdgeWidth, out int wb, Settings.MaxEdgeWidth) ||
+            !ReadInt(left, "Left width", Settings.MinEdgeWidth, out int wl, Settings.MaxEdgeWidth) ||
+            !ReadInt(right, "Right width", Settings.MinEdgeWidth, out int wr, Settings.MaxEdgeWidth) ||
             !ReadInt(dash, "Dash length", Settings.MinDashLen, out int d) ||
             !ReadInt(gap, "Gap length", Settings.MinGapLen, out int g) ||
             !ReadInt(step, "Anim step", Settings.MinAnimStep, out int st) ||
@@ -102,12 +102,14 @@ internal sealed class ConfigForm : Form
         return true;
     }
 
-    private bool ReadInt(TextBox box, string name, int min, out int value)
+    private bool ReadInt(TextBox box, string name, int min, out int value, int max = int.MaxValue)
     {
-        if (Settings.TryParseInt(box.Text, out value) && value >= min)
+        if (Settings.TryParseInt(box.Text, out value) && value >= min && value <= max)
             return true;
         box.Focus();
-        return Error($"{name} must be a whole number of at least {min}.");
+        return Error(max == int.MaxValue
+            ? $"{name} must be a whole number of at least {min}."
+            : $"{name} must be a whole number from {min} to {max}.");
     }
 
     private bool Error(string message)
@@ -144,8 +146,19 @@ internal sealed class ConfigForm : Form
         return (a, b);
     }
 
+    /// <summary>Edit that selects its whole content when it gets focus, by keyboard or mouse.</summary>
+    private class SelectingTextBox : TextBox
+    {
+        protected override void OnEnter(EventArgs e)
+        {
+            base.OnEnter(e);
+            // Deferred: a mouse click sets the caret after Enter, which would undo the selection.
+            BeginInvoke(SelectAll);
+        }
+    }
+
     /// <summary>Edit that accepts digits only, like AHK's Number option.</summary>
-    private sealed class NumberBox : TextBox
+    private sealed class NumberBox : SelectingTextBox
     {
         protected override CreateParams CreateParams
         {

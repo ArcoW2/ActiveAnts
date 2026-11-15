@@ -43,6 +43,23 @@ public sealed class SettingsTests : IDisposable
         Assert.Empty(problems);
     }
 
+    [Theory]
+    [InlineData("topWidth")]
+    [InlineData("rightWidth")]
+    [InlineData("bottomWidth")]
+    [InlineData("leftWidth")]
+    public void Edge_width_at_maximum_accepted_above_falls_back(string key)
+    {
+        var problems = new List<string>();
+        Settings atMax = Settings.Load(Ini($"[Style]\r\n{key}={Settings.MaxEdgeWidth}\r\n"), problems);
+        Assert.Equal(Settings.MaxEdgeWidth, Get(atMax, key));
+        Assert.Empty(problems);
+
+        Settings above = Settings.Load(Ini($"[Style]\r\n{key}={Settings.MaxEdgeWidth + 1}\r\n"), problems);
+        Assert.Equal(4, Get(above, key));
+        Assert.Single(problems);
+    }
+
     [Fact]
     public void Ahk_borderWidth_is_the_default_for_edges_without_their_own_key()
     {

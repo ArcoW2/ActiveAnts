@@ -12,6 +12,7 @@ namespace ActiveAnts;
 internal sealed record Settings
 {
     public const int MinEdgeWidth = 0;          // 0: that edge is not drawn
+    public const int MaxEdgeWidth = 10;
     public const int MinDashLen = 1;
     public const int MinGapLen = 1;
     public const int MinAnimStep = 0;
@@ -51,14 +52,14 @@ internal sealed record Settings
         }
 
         // borderWidth (AHK, one width for all edges) is the default for edges without their own key.
-        int width = ReadInt(iniPath, "Style", "borderWidth", d.TopWidth, 1, problems);
+        int width = ReadInt(iniPath, "Style", "borderWidth", d.TopWidth, 1, problems, MaxEdgeWidth);
         return new Settings
         {
             BorderColor = borderColor,
-            TopWidth = ReadInt(iniPath, "Style", "topWidth", width, MinEdgeWidth, problems),
-            RightWidth = ReadInt(iniPath, "Style", "rightWidth", width, MinEdgeWidth, problems),
-            BottomWidth = ReadInt(iniPath, "Style", "bottomWidth", width, MinEdgeWidth, problems),
-            LeftWidth = ReadInt(iniPath, "Style", "leftWidth", width, MinEdgeWidth, problems),
+            TopWidth = ReadInt(iniPath, "Style", "topWidth", width, MinEdgeWidth, problems, MaxEdgeWidth),
+            RightWidth = ReadInt(iniPath, "Style", "rightWidth", width, MinEdgeWidth, problems, MaxEdgeWidth),
+            BottomWidth = ReadInt(iniPath, "Style", "bottomWidth", width, MinEdgeWidth, problems, MaxEdgeWidth),
+            LeftWidth = ReadInt(iniPath, "Style", "leftWidth", width, MinEdgeWidth, problems, MaxEdgeWidth),
             DashLen = ReadInt(iniPath, "Style", "dashLen", d.DashLen, MinDashLen, problems),
             GapLen = ReadInt(iniPath, "Style", "gapLen", d.GapLen, MinGapLen, problems),
             AnimStep = ReadInt(iniPath, "Anim", "animStep", d.AnimStep, MinAnimStep, problems),
@@ -106,7 +107,8 @@ internal sealed record Settings
         return int.TryParse(text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out value);
     }
 
-    private static int ReadInt(string iniPath, string section, string key, int defaultValue, int min, List<string> problems)
+    private static int ReadInt(string iniPath, string section, string key, int defaultValue, int min, List<string> problems,
+                               int max = int.MaxValue)
     {
         string text = Read(iniPath, section, key);
         if (text.Length == 0)
@@ -119,6 +121,11 @@ internal sealed record Settings
         if (value < min)
         {
             problems.Add($"[{section}] {key}={value} is below the minimum {min}; using default {defaultValue}");
+            return defaultValue;
+        }
+        if (value > max)
+        {
+            problems.Add($"[{section}] {key}={value} is above the maximum {max}; using default {defaultValue}");
             return defaultValue;
         }
         return value;
