@@ -82,7 +82,7 @@ internal sealed class TrayContext : ApplicationContext
         var icon = new NotifyIcon
         {
             Icon = new Icon(s, SystemInformation.SmallIconSize),
-            Text = "ActiveAnts",
+            Text = "Active ants",
             ContextMenuStrip = menu,
             Visible = true,
         };
