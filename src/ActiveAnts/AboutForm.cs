@@ -3,10 +3,11 @@ using System.Reflection;
 
 namespace ActiveAnts;
 
-/// <summary>About window: name, version, author, project link and the license text.</summary>
+/// <summary>About window: name, version, author, project and Ko-fi links and the license text.</summary>
 internal sealed class AboutForm : Form
 {
     public const string ProjectUrl = "https://github.com/ArcoW2/ActiveAnts";
+    public const string SupportUrl = "https://ko-fi.com/arcowitter";
 
     public AboutForm()
     {
@@ -49,16 +50,19 @@ internal sealed class AboutForm : Form
             Bounds = new Rectangle(72, 38, 388, 36),
         };
         var link = new LinkLabel { Text = ProjectUrl, Bounds = new Rectangle(72, 76, 388, 20) };
-        link.LinkClicked += (_, _) => Process.Start(new ProcessStartInfo(ProjectUrl) { UseShellExecute = true });
+        link.LinkClicked += (_, _) => Open(ProjectUrl);
+        var support = new LinkLabel { Text = "Support on Ko-fi: " + SupportUrl, Bounds = new Rectangle(72, 98, 388, 20) };
+        support.LinkArea = new LinkArea("Support on Ko-fi: ".Length, SupportUrl.Length);
+        support.LinkClicked += (_, _) => Open(SupportUrl);
 
-        var licenseLabel = new Label { Text = "Released under the MIT License:", Bounds = new Rectangle(12, 106, 448, 20) };
+        var licenseLabel = new Label { Text = "Released under the MIT License:", Bounds = new Rectangle(12, 128, 448, 20) };
         var license = new TextBox
         {
             Multiline = true,
             ReadOnly = true,
             ScrollBars = ScrollBars.Vertical,
             Text = LicenseText(),
-            Bounds = new Rectangle(12, 128, 448, 204),
+            Bounds = new Rectangle(12, 150, 448, 182),
             TabStop = false,
         };
         var ok = new Button { Text = "OK", DialogResult = DialogResult.OK, Bounds = new Rectangle(360, 342, 100, 26) };
@@ -66,9 +70,11 @@ internal sealed class AboutForm : Form
         AcceptButton = ok;
         CancelButton = ok;
 
-        Controls.AddRange([title, author, link, licenseLabel, license, ok]);
+        Controls.AddRange([title, author, link, support, licenseLabel, license, ok]);
         ResumeLayout(false);
     }
+
+    private static void Open(string url) => Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
 
     /// <summary>The LICENSE file, embedded at build time; line breaks normalised for the edit control.</summary>
     internal static string LicenseText()

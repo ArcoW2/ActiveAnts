@@ -16,7 +16,7 @@ Run `ActiveAnts.exe`. No installer; copy it anywhere. A tray icon appears:
 | Option | Action |
 |--------|--------|
 | Config... | Open the settings window (also on double-click) |
-| About... | Version, author, project link and license |
+| About... | Version, author, project and Ko-fi links, license |
 | Reload | Restart the app |
 | Exit | Stop the app |
 
