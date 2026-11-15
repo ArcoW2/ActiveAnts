@@ -88,7 +88,7 @@ internal sealed class BorderRenderer : IDisposable
     }
 
     /// <summary>Full redraw at a new geometry.</summary>
-    public void Show(RECT newFrame, IReadOnlyList<StripPiece> pieces, int dashOffset)
+    public void Show(RECT newFrame, IReadOnlyList<StripPiece> pieces, float dashOffset)
     {
         frame = newFrame;
         while (surfaces.Count < pieces.Count)
@@ -99,7 +99,7 @@ internal sealed class BorderRenderer : IDisposable
             StripSurface s = surfaces[i];
             s.Place(pieces[i]);
             Render(s, dashOffset);
-            s.Push(withGeometry: true);
+            s.Push();
             s.Window.ShowNoActivate();
         }
         for (int i = pieces.Count; i < activeCount; i++)
@@ -108,12 +108,12 @@ internal sealed class BorderRenderer : IDisposable
     }
 
     /// <summary>Animation frame: same geometry, new dash offset.</summary>
-    public void Animate(int dashOffset)
+    public void Animate(float dashOffset)
     {
         for (int i = 0; i < activeCount; i++)
         {
             Render(surfaces[i], dashOffset);
-            surfaces[i].Push(withGeometry: false);
+            surfaces[i].Push();
         }
     }
 
@@ -128,10 +128,10 @@ internal sealed class BorderRenderer : IDisposable
 
     public bool WindowsAlive() => surfaces.TrueForAll(s => Native.IsWindow(s.Window.Handle));
 
-    private void Render(StripSurface s, int dashOffset)
+    private void Render(StripSurface s, float dashOffset)
     {
         Pen pen = PenFor(new PenKey(style, s.Scale));
-        pen.DashOffset = dashOffset / (float)style.Width;
+        pen.DashOffset = dashOffset / style.Width;
         Graphics g = s.Graphics!;
         g.Clear(Color.FromArgb(0));
         g.DrawRectangle(pen, frame.Left, frame.Top, frame.Width, frame.Height);
@@ -187,7 +187,9 @@ internal sealed class BorderRenderer : IDisposable
             Graphics.TranslateTransform(-Bounds.Left, -Bounds.Top);
         }
 
-        public unsafe void Push(bool withGeometry)
+        // Position and size are always passed: with NULL for them, Windows does not show the
+        // new content (measured: only the full redraws reached the screen).
+        public unsafe void Push()
         {
             var dst = new POINT { X = Bounds.Left, Y = Bounds.Top };
             var size = new SIZE { Cx = width, Cy = height };
@@ -198,7 +200,7 @@ internal sealed class BorderRenderer : IDisposable
                 SourceConstantAlpha = 255,
                 AlphaFormat = Native.AC_SRC_ALPHA,
             };
-            Native.UpdateLayeredWindow(Window.Handle, 0, withGeometry ? &dst : null, withGeometry ? &size : null,
+            Native.UpdateLayeredWindow(Window.Handle, 0, &dst, &size,
                                        hdc, &src, 0, &blend, Native.ULW_ALPHA);
         }
 

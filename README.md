@@ -35,6 +35,7 @@ monitors they scale with that monitor's DPI.
 | Anim | `animMs` | `40` | 10 | Animation tick interval (ms) |
 | Anim | `settleMs` | `120` | 0 | Delay after a window stops moving before redrawing (ms) |
 | Anim | `syncForegroundMs` | `500` | 100 | Fallback interval to resync the active window (ms) |
+| Anim | `clockwise` | `0` | | `1` walks the ants clockwise; `0` counterclockwise, as the AHK version |
 | Debug | `enabled` | `0` | | `1` writes `ants-debug.log` next to the exe |
 
 A missing, invalid or out-of-range value falls back to its default.

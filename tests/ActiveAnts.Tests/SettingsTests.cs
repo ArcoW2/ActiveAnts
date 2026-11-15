@@ -28,6 +28,7 @@ public sealed class SettingsTests : IDisposable
         Assert.Equal(40, s.AnimMs);
         Assert.Equal(120, s.SettleMs);
         Assert.Equal(500, s.SyncForegroundMs);
+        Assert.False(s.Clockwise);
         Assert.False(s.DebugEnabled);
         Assert.Empty(problems);
     }
@@ -110,6 +111,7 @@ public sealed class SettingsTests : IDisposable
             AnimMs = 17,
             SettleMs = 0,
             SyncForegroundMs = 750,
+            Clockwise = true,
             DebugEnabled = true,
         };
         string path = Path.Combine(dir, "roundtrip.ini");

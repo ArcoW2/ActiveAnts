@@ -15,8 +15,17 @@ internal static class WindowGeometry
 
     public static float Scale(uint dpi) => dpi / 96f;
 
-    public static int NextDashOffset(int offset, int step, int dashLen, int gapLen) =>
-        (offset + step) % (dashLen + gapLen);
+    /// <summary>
+    /// Dash offset after <paramref name="elapsedMs"/> of animation: animStep pixels per animMs,
+    /// taken from the clock so timer jitter does not change the speed. A positive step walks
+    /// the ants counterclockwise, a negative one clockwise. Result is in [0, dashLen + gapLen).
+    /// </summary>
+    public static float DashOffsetAt(float startOffset, double elapsedMs, int animStep, int animMs, int dashLen, int gapLen)
+    {
+        int period = dashLen + gapLen;
+        double offset = (startOffset + elapsedMs * animStep / animMs) % period;
+        return (float)(offset < 0 ? offset + period : offset);
+    }
 
     /// <summary>Window covers its monitor, within a tolerance for the DWM frame difference.</summary>
     public static bool IsFullScreen(RECT window, RECT monitor, int tolerance = FullScreenTolerance) =>

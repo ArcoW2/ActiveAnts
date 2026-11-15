@@ -27,6 +27,7 @@ internal sealed record Settings
     public int AnimMs { get; init; } = 40;
     public int SettleMs { get; init; } = 120;
     public int SyncForegroundMs { get; init; } = 500;
+    public bool Clockwise { get; init; }      // false: counterclockwise, as the AHK version
     public bool DebugEnabled { get; init; }
 
     public static string IniPathFor(string exePath) => Path.ChangeExtension(exePath, ".ini");
@@ -56,6 +57,7 @@ internal sealed record Settings
             AnimMs = ReadInt(iniPath, "Anim", "animMs", d.AnimMs, MinAnimMs, problems),
             SettleMs = ReadInt(iniPath, "Anim", "settleMs", d.SettleMs, MinSettleMs, problems),
             SyncForegroundMs = ReadInt(iniPath, "Anim", "syncForegroundMs", d.SyncForegroundMs, MinSyncForegroundMs, problems),
+            Clockwise = ReadInt(iniPath, "Anim", "clockwise", 0, 0, problems) != 0,
             DebugEnabled = ReadInt(iniPath, "Debug", "enabled", 0, 0, problems) != 0,
         };
     }
@@ -71,6 +73,7 @@ internal sealed record Settings
         Write(iniPath, "Anim", "animMs", AnimMs);
         Write(iniPath, "Anim", "settleMs", SettleMs);
         Write(iniPath, "Anim", "syncForegroundMs", SyncForegroundMs);
+        Write(iniPath, "Anim", "clockwise", Clockwise ? 1 : 0);
         Write(iniPath, "Debug", "enabled", DebugEnabled ? 1 : 0);
     }
 

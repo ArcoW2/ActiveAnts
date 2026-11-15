@@ -38,12 +38,24 @@ public sealed class GeometryTests
         Assert.True(WindowGeometry.IsFullScreen(new RECT(-8, -8, 1928, 1088), Monitor));
 
     [Theory]
-    [InlineData(0, 2, 8, 32, 2)]
-    [InlineData(38, 2, 8, 32, 0)]
-    [InlineData(39, 2, 8, 32, 1)]
-    [InlineData(5, 0, 8, 32, 5)]
-    public void Dash_offset_wraps_at_period(int offset, int step, int dash, int gap, int expected) =>
-        Assert.Equal(expected, WindowGeometry.NextDashOffset(offset, step, dash, gap));
+    [InlineData(0f, 40, 2f)]        // one animMs: one animStep
+    [InlineData(0f, 20, 1f)]        // half an animMs: half a step
+    [InlineData(0f, 800, 0f)]       // 20 steps of 2 = 40 = one period: wraps
+    [InlineData(0f, 820, 1f)]
+    [InlineData(39f, 40, 1f)]       // start offset carried, then wrapped
+    public void Dash_offset_follows_the_clock_and_wraps_at_period(float start, double elapsedMs, float expected) =>
+        Assert.Equal(expected, WindowGeometry.DashOffsetAt(start, elapsedMs, 2, 40, 8, 32), 4);
+
+    [Theory]
+    [InlineData(0f, 40, 38f)]       // negative step (clockwise) wraps below zero into the period
+    [InlineData(10f, 100, 5f)]
+    [InlineData(0f, 800, 0f)]
+    public void Dash_offset_with_negative_step_stays_in_period(float start, double elapsedMs, float expected) =>
+        Assert.Equal(expected, WindowGeometry.DashOffsetAt(start, elapsedMs, -2, 40, 8, 32), 4);
+
+    [Fact]
+    public void Dash_offset_stands_still_with_zero_step() =>
+        Assert.Equal(5f, WindowGeometry.DashOffsetAt(5f, 10_000, 0, 40, 8, 32));
 
     [Theory]
     [InlineData(96u, 1f)]

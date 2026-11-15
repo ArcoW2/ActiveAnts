@@ -36,12 +36,12 @@ deviations are explained in the referenced section.
 | Foreground | `idObject != 0` ignored; re-query `GetForegroundWindow`, fallback to hook hwnd; clear drag; cancel settle; redraw after 30 ms | Same, one-shot timer 30 ms |
 | Move/resize | Tracked window only; first event hides border and sets dragging; settle one-shot reset to `settleMs` on every event | Same |
 | Settle | dragging=false, redraw | Same |
-| Animate | Every `animMs`; heartbeat for watchdog; skip while dragging; `dashOffset = (dashOffset + animStep) mod (dashLen + gapLen)`; redraw | Same |
+| Animate | Every `animMs`; heartbeat for watchdog; skip while dragging; `dashOffset = (dashOffset + animStep) mod (dashLen + gapLen)`; redraw | Offset taken from the clock: `animStep` per `animMs` of animation time, so timer jitter does not change the speed; frozen while hidden or dragging. Direction option `clockwise` (AHK walks counterclockwise) |
 | Hide | overlayVisible=false, stop Animate timer, hide overlay | Same |
 | Redraw | Hide if no window / gone / own overlay / minimised / full-screen; visible rect via `DwmGetWindowAttribute(DWMWA_EXTENDED_FRAME_BOUNDS)` with `GetWindowRect` fallback; padding `ceil(w/2)+1`; draw; update layered; 10 consecutive errors -> restart | Same checks and outcome; full geometry on events only, Animate tick checks `IsWindow` only (see 3.4) |
 | Full-screen test | Window rect vs `MonitorFromWindow(MONITOR_DEFAULTTONEAREST)` monitor rect, tolerance 4 px | Same, as a pure function for testing |
 | Draw cache | DIB rebuilt on size change; pen rebuilt on `color|width|dash|gap` change; per frame: clear, set dash offset, draw rectangle | `Bitmap(w, h, stride, Format32bppPArgb, pBits)` over one DIB section per strip; `Pen` with `DashPattern` = len/width and `DashOffset` = offset/width; `SmoothingMode.AntiAlias`; pen key also includes the DPI scale (see 3.3) |
-| UpdateLayered | `UpdateLayeredWindow` with `ULW_ALPHA`, `AC_SRC_OVER`, `AC_SRC_ALPHA`, const alpha 255; show; arm heartbeat; restart Animate | Same, per strip; Animate ticks pass `NULL` position and size |
+| UpdateLayered | `UpdateLayeredWindow` with `ULW_ALPHA`, `AC_SRC_OVER`, `AC_SRC_ALPHA`, const alpha 255; show; arm heartbeat; restart Animate | Same, per strip; position and size passed on every call (with `NULL` for them Windows did not show the new content: measured, only full redraws reached the screen) |
 | Layout change | `WM_DISPLAYCHANGE`, `WM_DPICHANGED`, `WM_DEVICECHANGE` -> restart process after 1500 ms debounce | No restart. `WM_DISPLAYCHANGE` -> debounced full redraw; `WM_DPICHANGED` swallowed; `WM_DEVICECHANGE` ignored (see 3.5) |
 | Power | `WM_POWERBROADCAST` with `PBT_APMRESUMESUSPEND` (7) or `PBT_APMRESUMEAUTOMATIC` (18) -> rehook after 2000 ms | Same |
 | Rehook | Unhook, re-register; on failure restart; reset drag, settle, Animate, SyncForeground; redraw | Same |
@@ -61,7 +61,7 @@ Not ported: `DoRecalibrate` is dead code in the AHK script (never referenced).
 - Location: directory of `Environment.ProcessPath` (not `AppContext.BaseDirectory`, which points to a
   temp extraction folder for some single-file setups).
 - Format: same sections and keys as `marching-ants.ini`: `[Style] borderColor borderWidth dashLen
-  gapLen`, `[Anim] animStep animMs settleMs syncForegroundMs`, `[Debug] enabled`. Color stored as
+  gapLen`, `[Anim] animStep animMs settleMs syncForegroundMs clockwise` (`clockwise` is new), `[Debug] enabled`. Color stored as
   `0x%08X` hex string.
 - Defaults (missing file or key) are the values of the current `marching-ants.ini`:
 
@@ -75,6 +75,7 @@ Not ported: `DoRecalibrate` is dead code in the AHK script (never referenced).
   | `animMs` | `40` |
   | `settleMs` | `120` |
   | `syncForegroundMs` | `500` |
+  | `clockwise` (Anim) | `0` |
   | `enabled` (Debug) | `0` |
 
 - Invalid or out-of-range value in the INI: that key falls back to its default, logged when debug is
@@ -148,7 +149,7 @@ Choices in ActiveAnts:
 2. **Geometry on events, not per frame.** Full geometry (visible rect, minimised, full-screen, monitor
    DPI) is computed on foreground change, settle, rehook, config apply, display change and each
    SyncForeground tick. The Animate tick only checks `IsWindow` on the tracked HWND, redraws the
-   strips at the known position, and passes `NULL` for position and size to `UpdateLayeredWindow`.
+   strips at the known position (position and size are still passed to `UpdateLayeredWindow`, see 3.1).
 3. **No restart on display changes** (see 3.5): a redraw is cheaper than a process restart.
 4. **No work while hidden or dragging** (already AHK behaviour): Animate timer stopped when hidden,
    tick skips while dragging.

@@ -24,7 +24,8 @@ internal sealed class TrayContext : ApplicationContext
     private readonly Timer rehookTimer = new();
     private Settings settings;
     private ConfigForm? configForm;
-    private int dashOffset;
+    private readonly Stopwatch animClock = new();    // runs while the animation runs
+    private float dashStart;                         // offset when animClock was last reset
     private int consecutiveErrors;
     private long lastAnimTick;
     private bool restarting;
@@ -124,10 +125,11 @@ internal sealed class TrayContext : ApplicationContext
                 return;
             }
 
-            renderer.Show(frame, pieces, dashOffset);
+            renderer.Show(frame, pieces, DashOffset());
             lastAnimTick = Environment.TickCount64;     // arm the watchdog on first show
             if (!animTimer.Enabled)
                 animTimer.Start();
+            animClock.Start();
             consecutiveErrors = 0;
         }
         catch (Exception e)
@@ -142,7 +144,6 @@ internal sealed class TrayContext : ApplicationContext
         lastAnimTick = Environment.TickCount64;     // heartbeat for the watchdog
         if (tracker.Dragging || !renderer.Visible)
             return;
-        dashOffset = WindowGeometry.NextDashOffset(dashOffset, settings.AnimStep, settings.DashLen, settings.GapLen);
         try
         {
             if (!Native.IsWindow(tracker.Current))
@@ -150,7 +151,7 @@ internal sealed class TrayContext : ApplicationContext
                 HideBorder();
                 return;
             }
-            renderer.Animate(dashOffset);
+            renderer.Animate(DashOffset());
             consecutiveErrors = 0;
         }
         catch (Exception e)
@@ -159,9 +160,15 @@ internal sealed class TrayContext : ApplicationContext
         }
     }
 
+    private float DashOffset() =>
+        WindowGeometry.DashOffsetAt(dashStart, animClock.Elapsed.TotalMilliseconds,
+                                    settings.Clockwise ? -settings.AnimStep : settings.AnimStep,
+                                    settings.AnimMs, settings.DashLen, settings.GapLen);
+
     private void HideBorder()
     {
         animTimer.Stop();       // no work while nothing is shown
+        animClock.Stop();       // the pattern stays put while hidden or dragging
         renderer.Hide();
     }
 
@@ -285,11 +292,16 @@ internal sealed class TrayContext : ApplicationContext
 
     private bool Apply(Settings newSettings, bool runAtStartup, IWin32Window owner)
     {
+        // Keep the pattern where it is; the new speed applies from here.
+        dashStart = DashOffset() % (newSettings.DashLen + newSettings.GapLen);
+        bool animating = animClock.IsRunning;
+        animClock.Reset();
+        if (animating)
+            animClock.Start();
         settings = newSettings;
         Log.Enabled = settings.DebugEnabled;
         renderer.SetStyle(BorderStyle.From(settings));
         tracker.SettleMs = settings.SettleMs;
-        dashOffset %= settings.DashLen + settings.GapLen;
         RestartTimer(animTimer, settings.AnimMs);
         RestartTimer(syncTimer, settings.SyncForegroundMs);
 

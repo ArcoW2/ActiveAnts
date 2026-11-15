@@ -15,6 +15,7 @@ public sealed class PenKeyTests
         "settleMs" => Base with { SettleMs = 200 },
         "syncForegroundMs" => Base with { SyncForegroundMs = 1000 },
         "debug" => Base with { DebugEnabled = true },
+        "clockwise" => Base with { Clockwise = true },
         _ => throw new ArgumentException(what),
     };
 
@@ -36,6 +37,7 @@ public sealed class PenKeyTests
     [InlineData("settleMs")]
     [InlineData("syncForegroundMs")]
     [InlineData("debug")]
+    [InlineData("clockwise")]
     public void Other_changes_keep_the_pen(string what) =>
         Assert.Equal(PenKey.For(Base, 1.25f), PenKey.For(Change(what), 1.25f));
 }

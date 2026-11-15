@@ -7,7 +7,7 @@ internal sealed class ConfigForm : Form
     private readonly Func<IWin32Window, bool> save;
     private readonly TextBox color;
     private readonly NumberBox width, dash, gap, step, animMs, settle, sync;
-    private readonly CheckBox debug, startup;
+    private readonly CheckBox clockwise, debug, startup;
 
     /// <param name="apply">Takes the new settings and the startup choice; false keeps the window open.</param>
     /// <param name="save">Writes the INI; false keeps the window open.</param>
@@ -25,30 +25,32 @@ internal sealed class ConfigForm : Form
         MaximizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
         TopMost = true;
-        ClientSize = new Size(472, 262);
+        ClientSize = new Size(472, 288);
         using (Stream? s = typeof(ConfigForm).Assembly.GetManifestResourceStream("ActiveAnts.ant.ico"))
             if (s != null)
                 Icon = new Icon(s);
 
-        var style = Group("Style", 10, 8, 220, 130);
+        var style = Group("Style", 10, 8, 220, 156);
         color = Field(style, 0, "Border color (ARGB):", new TextBox(), $"0x{settings.BorderColor:X8}");
         width = Field(style, 1, "Border width (px):", new NumberBox(), settings.BorderWidth.ToString());
         dash = Field(style, 2, "Dash length (px):", new NumberBox(), settings.DashLen.ToString());
         gap = Field(style, 3, "Gap length (px):", new NumberBox(), settings.GapLen.ToString());
 
-        var anim = Group("Animation", 242, 8, 220, 130);
+        var anim = Group("Animation", 242, 8, 220, 156);
         step = Field(anim, 0, "Anim step (px/tick):", new NumberBox(), settings.AnimStep.ToString());
         animMs = Field(anim, 1, "Anim interval (ms):", new NumberBox(), settings.AnimMs.ToString());
         settle = Field(anim, 2, "Settle delay (ms):", new NumberBox(), settings.SettleMs.ToString());
         sync = Field(anim, 3, "Foreground sync (ms):", new NumberBox(), settings.SyncForegroundMs.ToString());
+        clockwise = new CheckBox { Text = "Walk clockwise", Location = new Point(12, 126), AutoSize = true, Checked = settings.Clockwise };
+        anim.Controls.Add(clockwise);
 
-        var general = Group("General", 10, 146, 220, 72);
+        var general = Group("General", 10, 172, 220, 72);
         debug = new CheckBox { Text = "Enable debug logging", Location = new Point(12, 20), AutoSize = true, Checked = settings.DebugEnabled };
         startup = new CheckBox { Text = "Run at Windows startup", Location = new Point(12, 44), AutoSize = true, Checked = runAtStartup };
         general.Controls.AddRange([debug, startup]);
 
-        var applyButton = new Button { Text = "Apply", Bounds = new Rectangle(10, 228, 100, 26) };
-        var saveButton = new Button { Text = "Save && Close", Bounds = new Rectangle(122, 228, 100, 26) };
+        var applyButton = new Button { Text = "Apply", Bounds = new Rectangle(10, 254, 100, 26) };
+        var saveButton = new Button { Text = "Save && Close", Bounds = new Rectangle(122, 254, 100, 26) };
         applyButton.Click += (_, _) => Apply();
         saveButton.Click += (_, _) => SaveAndClose();
         Controls.AddRange([applyButton, saveButton]);
@@ -87,6 +89,7 @@ internal sealed class ConfigForm : Form
             AnimMs = am,
             SettleMs = se,
             SyncForegroundMs = sy,
+            Clockwise = clockwise.Checked,
             DebugEnabled = debug.Checked,
         };
         return true;
