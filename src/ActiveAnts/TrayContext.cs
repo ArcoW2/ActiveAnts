@@ -23,6 +23,7 @@ internal sealed class TrayContext : ApplicationContext
     private readonly Timer rehookTimer = new();
     private Settings settings;
     private ConfigForm? configForm;
+    private AboutForm? aboutForm;
     private readonly FramePacer pacer;
     private double animTimeMs;                       // advances on frames only: stops while hidden or dragging
     private long lastFrameTs;                        // timestamp of the previous frame; 0 after a pause
@@ -75,6 +76,7 @@ internal sealed class TrayContext : ApplicationContext
         var config = new ToolStripMenuItem("Config...", null, (_, _) => ShowConfig());
         config.Font = new Font(config.Font, FontStyle.Bold);    // default item
         menu.Items.Add(config);
+        menu.Items.Add("About...", null, (_, _) => ShowAbout());
         menu.Items.Add("Reload", null, (_, _) => Restart("tray Reload"));
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => ExitThread());
@@ -303,6 +305,18 @@ internal sealed class TrayContext : ApplicationContext
         configForm.Show();
     }
 
+    private void ShowAbout()
+    {
+        if (aboutForm != null)
+        {
+            aboutForm.Activate();
+            return;
+        }
+        aboutForm = new AboutForm();
+        aboutForm.FormClosed += (_, _) => aboutForm = null;
+        aboutForm.Show();
+    }
+
     private bool Apply(Settings newSettings, bool runAtStartup, IWin32Window owner)
     {
         // Keep the pattern where it is; the new speed applies from here.
@@ -359,6 +373,7 @@ internal sealed class TrayContext : ApplicationContext
         {
             Log.Write("EXIT");
             configForm?.Dispose();
+            aboutForm?.Dispose();
             foreach (Timer t in new[] { syncTimer, watchdogTimer, displayTimer, rehookTimer })
                 t.Dispose();
             pacer.Dispose();

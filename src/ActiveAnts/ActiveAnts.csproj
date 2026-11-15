@@ -12,6 +12,10 @@
     <!-- Display name: FileDescription (Task Manager, taskbar tray settings) and ProductName. -->
     <AssemblyTitle>Active ants</AssemblyTitle>
     <Product>Active ants</Product>
+    <Version>1.0.0</Version>
+    <Authors>Arco Witter</Authors>
+    <Company>Arco Witter</Company>
+    <Copyright>Copyright (c) 2026 Arco Witter</Copyright>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>ant.ico</ApplicationIcon>
     <!-- DPI awareness is declared in app.manifest on purpose (plan 3.3): it must be in effect
@@ -21,6 +25,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="ant.ico" LogicalName="ActiveAnts.ant.ico" />
+    <EmbeddedResource Include="..\..\LICENSE" LogicalName="ActiveAnts.LICENSE" />
   </ItemGroup>
 
   <ItemGroup>
