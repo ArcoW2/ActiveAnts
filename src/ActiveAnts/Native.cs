@@ -138,6 +138,10 @@ internal static unsafe partial class Native
                                                    nint hdcSrc, POINT* pptSrc, uint crKey,
                                                    BLENDFUNCTION* pblend, uint dwFlags);
 
+    [LibraryImport("user32.dll", EntryPoint = "PostMessageW")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool PostMessage(nint hwnd, int msg, nint wParam, nint lParam);
+
     [LibraryImport("user32.dll")]
     public static partial nint GetThreadDpiAwarenessContext();
 
@@ -152,6 +156,9 @@ internal static unsafe partial class Native
 
     [LibraryImport("shcore.dll")]
     public static partial int GetDpiForMonitor(nint hmonitor, int dpiType, out uint dpiX, out uint dpiY);
+
+    [LibraryImport("dwmapi.dll")]
+    public static partial int DwmFlush();
 
     [LibraryImport("dwmapi.dll")]
     public static partial int DwmGetWindowAttribute(nint hwnd, int dwAttribute, out RECT pvAttribute, int cbAttribute);

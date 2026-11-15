@@ -17,15 +17,16 @@ internal sealed class TrayContext : ApplicationContext
     private readonly NotifyIcon tray;
     private readonly BorderRenderer renderer;
     private readonly WindowTracker tracker;
-    private readonly Timer animTimer = new();
     private readonly Timer syncTimer = new();
     private readonly Timer watchdogTimer = new() { Interval = 4000 };
     private readonly Timer displayTimer = new() { Interval = 1500 };
     private readonly Timer rehookTimer = new();
     private Settings settings;
     private ConfigForm? configForm;
-    private readonly Stopwatch animClock = new();    // runs while the animation runs
-    private float dashStart;                         // offset when animClock was last reset
+    private readonly FramePacer pacer;
+    private double animTimeMs;                       // advances on frames only: stops while hidden or dragging
+    private long lastFrameTs;                        // timestamp of the previous frame; 0 after a pause
+    private float dashStart;                         // offset when animTimeMs was last reset
     private int consecutiveErrors;
     private long lastAnimTick;
     private bool restarting;
@@ -48,12 +49,11 @@ internal sealed class TrayContext : ApplicationContext
         tracker = new WindowTracker(renderer.Owns, settings.SettleMs);
         tracker.RedrawRequested += Redraw;
         tracker.HideRequested += HideBorder;
+        pacer = new FramePacer(renderer.HostHandle, settings.AnimMs);
 
         tray = CreateTray();
 
-        animTimer.Interval = settings.AnimMs;
         syncTimer.Interval = settings.SyncForegroundMs;
-        animTimer.Tick += (_, _) => Animate();
         syncTimer.Tick += (_, _) => tracker.SyncForeground();
         watchdogTimer.Tick += (_, _) => Watchdog();
         displayTimer.Tick += (_, _) => DisplayChanged();
@@ -127,9 +127,8 @@ internal sealed class TrayContext : ApplicationContext
 
             renderer.Show(frame, pieces, DashOffset());
             lastAnimTick = Environment.TickCount64;     // arm the watchdog on first show
-            if (!animTimer.Enabled)
-                animTimer.Start();
-            animClock.Start();
+            if (!pacer.Running)
+                pacer.Start();
             consecutiveErrors = 0;
         }
         catch (Exception e)
@@ -138,12 +137,22 @@ internal sealed class TrayContext : ApplicationContext
         }
     }
 
-    /// <summary>Animation frame: geometry is known, only the dash offset moves.</summary>
-    private void Animate()
+    /// <summary>
+    /// Animation frame, paced on the compositor: geometry is known, only the dash offset moves.
+    /// The offset follows the frame timestamps, so frames on evenly spaced refreshes give even steps.
+    /// </summary>
+    private void Animate(long timestamp)
     {
+        pacer.FrameHandled();
         lastAnimTick = Environment.TickCount64;     // heartbeat for the watchdog
         if (tracker.Dragging || !renderer.Visible)
+        {
+            lastFrameTs = 0;
             return;
+        }
+        if (lastFrameTs != 0)
+            animTimeMs += Stopwatch.GetElapsedTime(lastFrameTs, timestamp).TotalMilliseconds;
+        lastFrameTs = timestamp;
         try
         {
             if (!Native.IsWindow(tracker.Current))
@@ -161,14 +170,14 @@ internal sealed class TrayContext : ApplicationContext
     }
 
     private float DashOffset() =>
-        WindowGeometry.DashOffsetAt(dashStart, animClock.Elapsed.TotalMilliseconds,
+        WindowGeometry.DashOffsetAt(dashStart, animTimeMs,
                                     settings.Clockwise ? -settings.AnimStep : settings.AnimStep,
                                     settings.AnimMs, settings.DashLen, settings.GapLen);
 
     private void HideBorder()
     {
-        animTimer.Stop();       // no work while nothing is shown
-        animClock.Stop();       // the pattern stays put while hidden or dragging
+        pacer.Stop();           // no work while nothing is shown
+        lastFrameTs = 0;        // the pattern stays put while hidden or dragging
         renderer.Hide();
     }
 
@@ -182,9 +191,13 @@ internal sealed class TrayContext : ApplicationContext
 
     // ---- resilience ----
 
-    private void OnHostMessage(int msg, nint wParam)
+    private void OnHostMessage(int msg, nint wParam, nint lParam)
     {
-        if (msg == Native.WM_DISPLAYCHANGE)
+        if (msg == FramePacer.WM_FRAME)
+        {
+            Animate(lParam);
+        }
+        else if (msg == Native.WM_DISPLAYCHANGE)
         {
             // Debounced: a dock or monitor change sends a burst.
             displayTimer.Stop();
@@ -223,7 +236,6 @@ internal sealed class TrayContext : ApplicationContext
         }
         Log.Write("Rehook: hooks re-registered");
         tracker.Reset();
-        RestartTimer(animTimer, settings.AnimMs);
         RestartTimer(syncTimer, settings.SyncForegroundMs);
         tracker.Current = Native.GetForegroundWindow();
         Redraw();
@@ -244,8 +256,9 @@ internal sealed class TrayContext : ApplicationContext
         }
         if (renderer.Visible && lastAnimTick > 0 && Environment.TickCount64 - lastAnimTick > settings.AnimMs * 10L)
         {
-            Log.Write("Watchdog: animation frozen - restarting timers");
-            RestartTimer(animTimer, settings.AnimMs);
+            Log.Write("Watchdog: animation frozen - restarting frame pacer and timers");
+            pacer.EnsureThread();
+            pacer.Start();
             RestartTimer(syncTimer, settings.SyncForegroundMs);
         }
     }
@@ -294,15 +307,12 @@ internal sealed class TrayContext : ApplicationContext
     {
         // Keep the pattern where it is; the new speed applies from here.
         dashStart = DashOffset() % (newSettings.DashLen + newSettings.GapLen);
-        bool animating = animClock.IsRunning;
-        animClock.Reset();
-        if (animating)
-            animClock.Start();
+        animTimeMs = 0;
         settings = newSettings;
         Log.Enabled = settings.DebugEnabled;
         renderer.SetStyle(BorderStyle.From(settings));
         tracker.SettleMs = settings.SettleMs;
-        RestartTimer(animTimer, settings.AnimMs);
+        pacer.IntervalMs = settings.AnimMs;
         RestartTimer(syncTimer, settings.SyncForegroundMs);
 
         bool ok = true;
@@ -349,8 +359,9 @@ internal sealed class TrayContext : ApplicationContext
         {
             Log.Write("EXIT");
             configForm?.Dispose();
-            foreach (Timer t in new[] { animTimer, syncTimer, watchdogTimer, displayTimer, rehookTimer })
+            foreach (Timer t in new[] { syncTimer, watchdogTimer, displayTimer, rehookTimer })
                 t.Dispose();
+            pacer.Dispose();
             tracker.Dispose();
             renderer.Dispose();
             tray.Visible = false;

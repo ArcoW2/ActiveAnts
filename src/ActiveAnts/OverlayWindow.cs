@@ -3,13 +3,14 @@ namespace ActiveAnts;
 /// <summary>
 /// One layered, click-through, topmost strip window. A raw window, not a Form: a per-monitor
 /// aware Form rescales and moves itself on WM_DPICHANGED, which would break the strip.
-/// The host strip (the first one created) also receives the display and power broadcasts.
+/// The host strip (the first one created) also receives the display and power broadcasts and
+/// the frame messages of the frame pacer.
 /// </summary>
 internal sealed class OverlayWindow : NativeWindow, IDisposable
 {
-    private readonly Action<int, nint>? hostMessage;
+    private readonly Action<int, nint, nint>? hostMessage;
 
-    public OverlayWindow(Action<int, nint>? hostMessage)
+    public OverlayWindow(Action<int, nint, nint>? hostMessage)
     {
         this.hostMessage = hostMessage;
         CreateHandle(new CreateParams
@@ -49,8 +50,12 @@ internal sealed class OverlayWindow : NativeWindow, IDisposable
                 m.Result = 0;       // swallowed: geometry is physical pixels, set by us only
                 return;
             case Native.WM_DISPLAYCHANGE or Native.WM_POWERBROADCAST:
-                hostMessage?.Invoke(m.Msg, m.WParam);
+                hostMessage?.Invoke(m.Msg, m.WParam, m.LParam);
                 break;
+            case FramePacer.WM_FRAME:
+                hostMessage?.Invoke(m.Msg, m.WParam, m.LParam);
+                m.Result = 0;
+                return;
         }
         base.WndProc(ref m);
     }

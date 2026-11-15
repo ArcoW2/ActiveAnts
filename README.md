@@ -31,8 +31,8 @@ monitors they scale with that monitor's DPI.
 | Style | `borderWidth` | `4` | 1 | Stroke width |
 | Style | `dashLen` | `8` | 1 | Dash length |
 | Style | `gapLen` | `32` | 1 | Gap between dashes |
-| Anim | `animStep` | `2` | 0 | Pixels the pattern advances per tick |
-| Anim | `animMs` | `40` | 10 | Animation tick interval (ms) |
+| Anim | `animStep` | `2` | 0 | Pixels the pattern advances per `animMs` |
+| Anim | `animMs` | `40` | 10 | Animation frame interval (ms); frames land on display refreshes, so the real interval is the first refresh at or after it (50 ms at 60 Hz) |
 | Anim | `settleMs` | `120` | 0 | Delay after a window stops moving before redrawing (ms) |
 | Anim | `syncForegroundMs` | `500` | 100 | Fallback interval to resync the active window (ms) |
 | Anim | `clockwise` | `0` | | `1` walks the ants clockwise; `0` counterclockwise, as the AHK version |
@@ -70,7 +70,11 @@ Output: `publish/ActiveAnts.exe`.
 - Four thin layered strip windows instead of one window-sized overlay: per-frame pixel work scales
   with the perimeter, not the area.
 - GDI+ draws into cached premultiplied-ARGB DIB sections; `UpdateLayeredWindow` pushes them.
-  Geometry is recomputed on events, not per animation frame.
+  Each strip draws only the part of the border path that crosses it. Geometry is recomputed on
+  events, not per animation frame.
+- Frames are paced on the compositor clock (`DCompositionWaitForCompositorClock`, Windows 11;
+  `DwmFlush` on Windows 10), not a timer: evenly spaced, whatever the refresh rate of each
+  screen, and no CPU while waiting. The animation stops entirely while the border is hidden.
 - `SetWinEventHook` for foreground and location changes; hooks are re-registered after
   sleep/hibernate resume. Display changes refresh the geometry without a restart.
 - A watchdog every 4 seconds recovers from frozen timers, dead hooks or lost overlay windows.
