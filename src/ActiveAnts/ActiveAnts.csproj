@@ -9,6 +9,9 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <AssemblyName>ActiveAnts</AssemblyName>
     <RootNamespace>ActiveAnts</RootNamespace>
+    <!-- Display name: FileDescription (Task Manager, taskbar tray settings) and ProductName. -->
+    <AssemblyTitle>Active ants</AssemblyTitle>
+    <Product>Active ants</Product>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>ant.ico</ApplicationIcon>
     <!-- DPI awareness is declared in app.manifest on purpose (plan 3.3): it must be in effect
