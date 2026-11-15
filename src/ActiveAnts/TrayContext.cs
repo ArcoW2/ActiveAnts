@@ -300,7 +300,7 @@ internal sealed class TrayContext : ApplicationContext
             configForm.Activate();
             return;
         }
-        configForm = new ConfigForm(settings, StartupRegistration.IsEnabled(exePath), Apply, Save);
+        configForm = new ConfigForm(settings, StartupRegistration.IsEnabled(exePath), Apply, Save, ShowAbout);
         configForm.FormClosed += (_, _) => configForm = null;
         configForm.Show();
     }

@@ -11,8 +11,9 @@ internal sealed class ConfigForm : Form
 
     /// <param name="apply">Takes the new settings and the startup choice; false keeps the window open.</param>
     /// <param name="save">Writes the INI; false keeps the window open.</param>
+    /// <param name="showAbout">Opens (or brings forward) the About window.</param>
     public ConfigForm(Settings settings, bool runAtStartup,
-                      Func<Settings, bool, IWin32Window, bool> apply, Func<IWin32Window, bool> save)
+                      Func<Settings, bool, IWin32Window, bool> apply, Func<IWin32Window, bool> save, Action showAbout)
     {
         this.apply = apply;
         this.save = save;
@@ -52,9 +53,11 @@ internal sealed class ConfigForm : Form
 
         var applyButton = new Button { Text = "Apply", Bounds = new Rectangle(10, 254, 100, 26) };
         var saveButton = new Button { Text = "Save && Close", Bounds = new Rectangle(122, 254, 100, 26) };
+        var aboutButton = new Button { Text = "About...", Bounds = new Rectangle(362, 254, 100, 26) };
         applyButton.Click += (_, _) => Apply();
         saveButton.Click += (_, _) => SaveAndClose();
-        Controls.AddRange([applyButton, saveButton]);
+        aboutButton.Click += (_, _) => showAbout();
+        Controls.AddRange([applyButton, saveButton, aboutButton]);
         ResumeLayout(false);
     }
 
