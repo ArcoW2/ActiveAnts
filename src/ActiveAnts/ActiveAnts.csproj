@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>ActiveAnts</AssemblyName>
+    <RootNamespace>ActiveAnts</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>ant.ico</ApplicationIcon>
+    <!-- DPI awareness is declared in app.manifest on purpose (plan 3.3): it must be in effect
+         before any window exists, and the strip windows are not WinForms forms. -->
+    <NoWarn>$(NoWarn);WFO0003</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="ant.ico" LogicalName="ActiveAnts.ant.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="ActiveAnts.Tests" />
+  </ItemGroup>
+
+</Project>

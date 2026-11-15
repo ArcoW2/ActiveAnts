@@ -1,0 +1,8 @@
+bin/
+obj/
+publish/
+.vs/
+*.user
+
+# Debug log written when [Debug] enabled=1
+ants-debug.log
