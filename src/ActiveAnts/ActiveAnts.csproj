@@ -12,7 +12,7 @@
     <!-- Display name: FileDescription (Task Manager, taskbar tray settings) and ProductName. -->
     <AssemblyTitle>Active ants</AssemblyTitle>
     <Product>Active ants</Product>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <Authors>Arco Witter</Authors>
     <Company>Arco Witter</Company>
     <Copyright>Copyright (c) 2026 Arco Witter</Copyright>

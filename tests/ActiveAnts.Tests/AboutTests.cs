@@ -19,6 +19,6 @@ public sealed class AboutTests
         Assembly a = typeof(AboutForm).Assembly;
         Assert.Equal("Copyright (c) 2026 Arco Witter", a.GetCustomAttribute<AssemblyCopyrightAttribute>()?.Copyright);
         Assert.Equal("Arco Witter", a.GetCustomAttribute<AssemblyCompanyAttribute>()?.Company);
-        Assert.Equal("1.0.0", a.GetName().Version?.ToString(3));
+        Assert.Equal("1.0.1", a.GetName().Version?.ToString(3));
     }
 }
