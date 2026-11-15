@@ -48,7 +48,7 @@ deviations are explained in the referenced section.
 | SyncForeground | Every `syncForegroundMs`: if foreground differs from current, switch and redraw | Same, plus refreshes geometry of the current window (see 3.4) |
 | Watchdog | Every 4000 ms: overlay gone -> restart; hook handle zero -> rehook in 100 ms; Animate silent > `animMs*10` while visible -> restart timers | Same; "overlay gone" checks all four strips |
 | Restart | Release mutex, start own exe, exit | `ReleaseMutex`, `Process.Start(Environment.ProcessPath)`, `Application.Exit` |
-| Config window | Groups Style (color ARGB hex, width, dash, gap), Animation (step, interval, settle, sync), General (debug logging, run at startup); Apply; Save & Close; single instance; topmost; invalid number -> error box | WinForms `Form`, title `ActiveAnts - Config`, same layout and controls; range validation (see 3.5) |
+| Config window | Groups Style (color ARGB hex, width, dash, gap), Animation (step, interval, settle, sync), General (debug logging, run at startup); Apply; Save & Close; single instance; topmost; invalid number -> error box | WinForms `Form`, title `Active ants - Config`, same layout and controls; range validation (see 3.5) |
 | Startup | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`, value `MarchingAnts`, quoted exe path; only write when state differs | Same key and value name (shared with AHK, see 3.6); `Microsoft.Win32.Registry`; state check compares the path (see 3.5) |
 | Logging | `ants-debug.log` next to exe, `HH:mm:ss | msg`, only when `[Debug] enabled=1` | Same |
 
@@ -204,7 +204,7 @@ overlay window gone, and the tray `Reload` item.
   loop; WinForms provides it.
 - **Mutex ownership.** .NET mutexes are thread-affine; acquire and release on the UI thread.
 - **GDI+.** `System.Drawing` starts GDI+ itself; no explicit `GdiplusStartup`.
-- **ASCII.** UI strings use plain ASCII: `Config...`, `ActiveAnts - Config`, `Save && Close` (the
+- **ASCII.** UI strings use plain ASCII: `Config...`, `Active ants - Config`, `Save && Close` (the
   `&&` renders a literal `&` in WinForms, same as AHK).
 
 ### 3.8 Packaging (no install)

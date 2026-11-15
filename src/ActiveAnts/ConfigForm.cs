@@ -20,7 +20,7 @@ internal sealed class ConfigForm : Form
         SuspendLayout();
         AutoScaleDimensions = new SizeF(96f, 96f);
         AutoScaleMode = AutoScaleMode.Dpi;
-        Text = "ActiveAnts - Config";
+        Text = "Active ants - Config";
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
